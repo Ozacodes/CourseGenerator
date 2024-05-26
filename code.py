@@ -1,5 +1,6 @@
 import streamlit as st
-from fpdf import FPDF
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 import base64
 import requests
 
@@ -35,23 +36,37 @@ def search_courses(query, sites):
 
     return all_results
 
-# Function to generate PDF
+# Function to generate PDF using reportlab
 def generate_pdf(course_results):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_xy(10, 10)
-    pdf.set_font('Arial', '', 12)
+    from io import BytesIO
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+
+    pdf.setFont("Helvetica", 12)
+    y = height - 40  # Starting Y position
 
     # Write each course info to the PDF
     for course in course_results:
-        pdf.set_text_color(0, 0, 255)  # Set text color to blue
-        pdf.cell(0, 10, f"Title: {course['title']}", ln=True)
-        pdf.set_text_color(0, 0, 0)  # Reset text color to black
-        pdf.cell(0, 10, f"Snippet: {course['snippet']}", ln=True)
-        pdf.cell(0, 10, f"Link: {course['link']}", ln=True)
-        pdf.cell(0, 10, "", ln=True)  # Add an empty line between courses
+        pdf.setFillColorRGB(0, 0, 1)  # Set text color to blue
+        pdf.drawString(40, y, f"Title: {course['title']}")
+        y -= 20
+        pdf.setFillColorRGB(0, 0, 0)  # Reset text color to black
+        pdf.drawString(40, y, f"Snippet: {course['snippet']}")
+        y -= 20
+        pdf.drawString(40, y, f"Link: {course['link']}")
+        y -= 30  # Add extra space between courses
 
-    return pdf.output(dest="S").encode("latin-1")
+        # Check if we need to add a new page
+        if y < 40:
+            pdf.showPage()
+            pdf.setFont("Helvetica", 12)
+            y = height - 40
+
+    pdf.save()
+    buffer.seek(0)
+    return buffer.getvalue()
 
 # Streamlit UI
 def main():
@@ -77,8 +92,8 @@ def main():
         st.markdown(create_download_link(pdf_content, "course_report"), unsafe_allow_html=True)
 
 def create_download_link(val, filename):
-    b64 = base64.b64encode(val)  # val looks like b'...'
-    return f'<a href="data:application/octet-stream;base64,{b64.decode()}" style="font-size: 16px; font-weight: bold;" download="{filename}.pdf">Download PDF</a>'
+    b64 = base64.b64encode(val).decode()  # val looks like b'...'
+    return f'<a href="data:application/octet-stream;base64,{b64}" style="font-size: 16px; font-weight: bold;" download="{filename}.pdf">Download PDF</a>'
 
 def execute_course_search(user_current_level, user_goal_level, course_topic):
     skill_levels = ['Beginner', 'Intermediate', 'Advanced']
